@@ -35,3 +35,9 @@ RPrime.exe Rufus Rachel
 
 If no command-line arguments are supplied the program renders the video feed without broadcasting
 position data.
+
+// ****** Acknowledgements ***** //
+While significant changes were made to the program, the Renderer class was based on an open-source
+project created by the developers as stereolabs. Some of the code remains the same.
+github repo of the project: https://github.com/stereolabs/zed-oculus
+blog post about the project:  https://www.stereolabs.com/blog/using-the-zed-with-oculus/
