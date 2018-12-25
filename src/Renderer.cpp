@@ -59,7 +59,7 @@ void Renderer::initialize(ovrSession *sess, ovrGraphicsLuid *id) {
 	int zedHeight = isRussell ? 720 : 480;
 
 	glGenTextures(2, zedTextureID);
-	for (int eye = 0; eye < 2; eye++) {
+	for (int eye = 0; eye < 2; ++eye) {
 		// Generate OpenGL texture
 		glBindTexture(GL_TEXTURE_2D, zedTextureID[eye]);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, zedWidth, zedHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
@@ -109,8 +109,7 @@ void Renderer::initialize(ovrSession *sess, ovrGraphicsLuid *id) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
-	}
-	else {
+	} else {
 		ovr_GetLastErrorInfo(&errInf);
 		std::cerr << "ERROR: failed creating swap texture " << errInf.ErrorString << std::endl;
 		ovr_Destroy(*session);
@@ -120,6 +119,7 @@ void Renderer::initialize(ovrSession *sess, ovrGraphicsLuid *id) {
 		SDL_Quit();
 		exit(EXIT_FAILURE);
 	}
+
 	glGenFramebuffers(1, &fboID);
 	glGenTextures(1, &depthBuffID);
 	glBindTexture(GL_TEXTURE_2D, depthBuffID);
@@ -141,6 +141,7 @@ void Renderer::initialize(ovrSession *sess, ovrGraphicsLuid *id) {
 		ovr_GetLastErrorInfo(&errInf);
 		std::cerr << "ERROR: Failed to create mirror texture " << errInf.ErrorString << std::endl;
 	}
+
 	GLuint mirrorTextureId;
 	ovr_GetMirrorTextureBufferGL(*session, mirrorTexture, &mirrorTextureId);
 
@@ -168,8 +169,7 @@ void Renderer::initialize(ovrSession *sess, ovrGraphicsLuid *id) {
 		// Convert this size to OpenGL viewport's frame's coordinates
 		heightGL = (heightFinal) / (float)(bufferSize.h);
 		widthGL = ((zedWidth * (heightFinal / (float)zedHeight)) / (float)widthFinal);
-	}
-	else {
+	} else {
 		std::cerr << "WARNING: ZED parameters got wrong values."
 			"Default vertical and horizontal FOV are used.\n"
 			"Check your calibration file or check if your ZED is not too close to a surface or an object."
@@ -308,7 +308,7 @@ void Renderer::render_frame() {
 			glClearColor(0, 0, 0, 1);
 
 			// Render for each Oculus eye the equivalent ZED image
-			for (int eye = 0; eye < 2; eye++) {
+			for (int eye = 0; eye < 2; ++eye) {
 				// Set the left or right vertical half of the buffer as the viewport
 				glViewport(eye == ovrEye_Left ? 0 : bufferSize.w / 2, 0, bufferSize.w / 2, bufferSize.h);
 				// Bind the left or right ZED image

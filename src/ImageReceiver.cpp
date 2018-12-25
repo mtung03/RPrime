@@ -1,34 +1,35 @@
 #include "ImageReceiver.hpp"
 
+
 ImageReceiver::ImageReceiver() {
 	// Set thread variables
-	thread_data[0].run = true;
-	thread_data[0].new_frame = true;
-	thread_data[1].run = true;
-	thread_data[1].new_frame = true;
+	thread_data[LEFT_EYE].run = true;
+	thread_data[LEFT_EYE].new_frame = true;
+	thread_data[RIGHT_EYE].run = true;
+	thread_data[RIGHT_EYE].new_frame = true;
 }
 
 ImageReceiver::~ImageReceiver() {
 	for (int eye = 0; eye < 2; eye++)
 		thread_data[eye].zed_image.free();
 
-	thread_data[0].run = false;
-	thread_data[1].run = false;
+	thread_data[LEFT_EYE].run = false;
+	thread_data[RIGHT_EYE].run = false;
 	runnerLeft.join();
 	runnerRight.join();
 }
 
 bool ImageReceiver::getIsRussell() {
-	thread_data[0].hasFrame.lock(); // will hang until thread has determined cam identity
-	return thread_data[0].isRussell;
+	thread_data[LEFT_EYE].hasFrame.lock(); // will hang until thread has determined cam identity
+	return thread_data[LEFT_EYE].isRussell;
 }
 
 void ImageReceiver::init_images(int width, int height) {
 	sl::uchar4 dark_bckgrd(44, 44, 44, 255);
-	for (int i = 0; i < 2; i++) {
+	for (int eye = 0; eye < 2; ++eye) {
 		// Set size and default value to texture
-		thread_data[i].zed_image.alloc(width, height, sl::MAT_TYPE_8U_C4, sl::MEM_GPU);
-		thread_data[i].zed_image.setTo(dark_bckgrd, sl::MEM_GPU);
+		thread_data[eye].zed_image.alloc(width, height, sl::MAT_TYPE_8U_C4, sl::MEM_GPU);
+		thread_data[eye].zed_image.setTo(dark_bckgrd, sl::MEM_GPU);
 	}
 }
 
@@ -41,12 +42,12 @@ void zed_runner(ImageReceiver::ThreadData *thread_data, bool isLeft) {
 	char buf[BUFLEN];
 	WSADATA wsa;
 
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+	if (0 != WSAStartup(MAKEWORD(2, 2), &wsa)) {
 		std::cerr << "Initialization failed. Error Code : " << WSAGetLastError() << "\n";
 		return;
 	}
 
-	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
+	if (INVALID_SOCKET == (s = socket(AF_INET, SOCK_DGRAM, 0))) {
 		std::cerr << "Could not create socket. Error Code : " << WSAGetLastError() << "\n";
 		return;
 	}
@@ -55,16 +56,15 @@ void zed_runner(ImageReceiver::ThreadData *thread_data, bool isLeft) {
 	receiver.sin_addr.s_addr = INADDR_ANY;
 	receiver.sin_port = htons(isLeft ? LPORT : RPORT);
 
-	if (bind(s, (struct sockaddr *)&receiver, sizeof(receiver)) == SOCKET_ERROR) {
+	if (SOCKET_ERROR == bind(s, (struct sockaddr *)&receiver, sizeof(receiver))) {
 		std::cerr << "Bind failed. Error Code : " << WSAGetLastError() << "\n";
 		return;
 	}
-	int frames = 0;
 
 	// determine which camera
 	memset(buf, '\0', BUFLEN);
 
-	if ((rec_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *) &si_other, &slen)) == SOCKET_ERROR) {
+	if (SOCKET_ERROR == (rec_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *) &si_other, &slen))) {
 		std::cerr << "recvfrom() failed. Error Code : " << WSAGetLastError() << "\n";
 		return;
 	}
@@ -78,7 +78,7 @@ void zed_runner(ImageReceiver::ThreadData *thread_data, bool isLeft) {
 	while (thread_data->run) {
 		memset(buf, '\0', BUFLEN);
 
-		if ((rec_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *) &si_other, &slen)) == SOCKET_ERROR) {
+		if (SOCKET_ERROR == (rec_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *) &si_other, &slen))) {
 			std::cerr << "recvfrom() failed. Error Code : " << WSAGetLastError() << "\n";
 			return;
 		}
@@ -102,25 +102,27 @@ void zed_runner(ImageReceiver::ThreadData *thread_data, bool isLeft) {
 
 void ImageReceiver::start_threads() {
 	// Launch ZED grab thread
-	runnerLeft = std::thread(zed_runner, &(thread_data[0]), true);
-	runnerRight = std::thread(zed_runner, &(thread_data[1]), false);
+	runnerLeft = std::thread(zed_runner, &(thread_data[LEFT_EYE]), true);
+	runnerRight = std::thread(zed_runner, &(thread_data[RIGHT_EYE]), false);
 }
 
 bool ImageReceiver::has_new_frame() {
-	return (thread_data[0].new_frame || thread_data[1].new_frame);
+	return (thread_data[LEFT_EYE].new_frame || thread_data[RIGHT_EYE].new_frame);
 }
 
 void ImageReceiver::copy_frames(cudaGraphicsResource *cimg_l, cudaGraphicsResource *cimg_r) {
-	thread_data[0].mtx.lock();
-	thread_data[1].mtx.lock();
+	thread_data[LEFT_EYE].mtx.lock();
+	thread_data[RIGHT_EYE].mtx.lock();
+
 	cudaArray_t arrIm;
 	cudaGraphicsSubResourceGetMappedArray(&arrIm, cimg_l, 0, 0);
-	cudaMemcpy2DToArray(arrIm, 0, 0, thread_data[0].zed_image.getPtr<sl::uchar1>(sl::MEM_GPU), thread_data[0].zed_image.getStepBytes(sl::MEM_GPU), thread_data[0].zed_image.getWidth() * 4, thread_data[0].zed_image.getHeight(), cudaMemcpyDeviceToDevice);
+	cudaMemcpy2DToArray(arrIm, 0, 0, thread_data[LEFT_EYE].zed_image.getPtr<sl::uchar1>(sl::MEM_GPU), thread_data[LEFT_EYE].zed_image.getStepBytes(sl::MEM_GPU), thread_data[LEFT_EYE].zed_image.getWidth() * 4, thread_data[LEFT_EYE].zed_image.getHeight(), cudaMemcpyDeviceToDevice);
 
 	cudaGraphicsSubResourceGetMappedArray(&arrIm, cimg_r, 0, 0);
-	cudaMemcpy2DToArray(arrIm, 0, 0, thread_data[1].zed_image.getPtr<sl::uchar1>(sl::MEM_GPU), thread_data[1].zed_image.getStepBytes(sl::MEM_GPU), thread_data[1].zed_image.getWidth() * 4, thread_data[1].zed_image.getHeight(), cudaMemcpyDeviceToDevice);
-	thread_data[0].mtx.unlock();
-	thread_data[1].mtx.unlock();
-	thread_data[0].new_frame = false;
-	thread_data[1].new_frame = false;
+	cudaMemcpy2DToArray(arrIm, 0, 0, thread_data[RIGHT_EYE].zed_image.getPtr<sl::uchar1>(sl::MEM_GPU), thread_data[RIGHT_EYE].zed_image.getStepBytes(sl::MEM_GPU), thread_data[RIGHT_EYE].zed_image.getWidth() * 4, thread_data[RIGHT_EYE].zed_image.getHeight(), cudaMemcpyDeviceToDevice);
+
+	thread_data[LEFT_EYE].mtx.unlock();
+	thread_data[RIGHT_EYE].mtx.unlock();
+	thread_data[LEFT_EYE].new_frame = false;
+	thread_data[RIGHT_EYE].new_frame = false;
 }

@@ -34,6 +34,9 @@
 #define LPORT 8000
 #define RPORT 8001
 
+#define LEFT_EYE 0
+#define RIGHT_EYE 1
+
 class ImageReceiver
 {
 public:

@@ -1,23 +1,21 @@
 #include "PositionBroadcaster.hpp"
 
 
-
+#define STATUS_FORMAT "{ \"head\": { \"orientation\": { \"roll\":%f, \"pitch\":%f, \"yaw\":%f }, \"position\": { \"x\": %f, \"y\": %f, \"z\": %f} }, \"hands\": { \"left\": { \"position\": { \"x\": %f, \"y\": %f, \"z\": %f }, \"orientation\": { \"roll\": %f, \"pitch\": %f, \"yaw\": %f } },  \"right\": { \"position\": { \"x\": %f, \"y\": %f, \"z\": %f }, \"orientation\": { \"roll\": %f, \"pitch\": %f, \"yaw\": %f }  } }, \"buttons\": { \"a\": %d, \"b\": %d, \"x\": %d, \"y\": %d, \"menu\": %d, \"leftTrig\": %f, \"rightTrig\": %f, \"leftGrip\": %f, \"rightGrip\": %f, \"left_jstick\": { \"x\": %f, \"y\": %f, \"button\": %d }, \"right_jstick\": { \"x\": %f, \"y\": %f, \"button\": %d } }}"
 
 #define MAX_SOCKETS 4
 
 void setup_socket(PositionBroadcaster::location loc, struct sockaddr_in& server, SOCKET *sd) {
 	WSADATA w;  // Used to open Windows connection 
 
-	if (WSAStartup(0x0101, &w) != 0)
-	{
+	if (WSAStartup(0x0101, &w) != 0) {
 		std::cerr << "Could not open Windows connection.\n";
 		exit(0);
 	}
 
 	// Open a datagram socket 
 	*sd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (*sd == INVALID_SOCKET)
-	{
+	if (*sd == INVALID_SOCKET) {
 		std::cerr << "Could not create socket.\n";
 		WSACleanup();
 		exit(0);
@@ -85,8 +83,13 @@ void position_broadcast_loop(PositionBroadcaster::Broadcast_thread_info *info) {
 		quat_to_euler(handOris[1], &handroll[1], &handpitch[1], &handyaw[1]);
 
 		// set up string to send in JSON
-		sprintf_s(send_buffer, sizeof(send_buffer), "{ \"head\": { \"orientation\": { \"roll\":%f, \"pitch\":%f, \"yaw\":%f }, \"position\": { \"x\": %f, \"y\": %f, \"z\": %f} }, \"hands\": { \"left\": { \"position\": { \"x\": %f, \"y\": %f, \"z\": %f }, \"orientation\": { \"roll\": %f, \"pitch\": %f, \"yaw\": %f } },  \"right\": { \"position\": { \"x\": %f, \"y\": %f, \"z\": %f }, \"orientation\": { \"roll\": %f, \"pitch\": %f, \"yaw\": %f }  } }, \"buttons\": { \"a\": %d, \"b\": %d, \"x\": %d, \"y\": %d, \"menu\": %d, \"leftTrig\": %f, \"rightTrig\": %f, \"leftGrip\": %f, \"rightGrip\": %f, \"left_jstick\": { \"x\": %f, \"y\": %f, \"button\": %d }, \"right_jstick\": { \"x\": %f, \"y\": %f, \"button\": %d } }}", \
-			roll, pitch, yaw, -pose.z, -pose.x, pose.y, -handPoses[0].z, -handPoses[0].x, handPoses[0].y, handroll[0], handpitch[0], handyaw[0], -handPoses[1].z, -handPoses[1].x, handPoses[1].y, handroll[1], handpitch[1], handyaw[1], inputState.Buttons & ovrButton_A, inputState.Buttons & ovrButton_B, inputState.Buttons & ovrButton_X, inputState.Buttons & ovrButton_Y, inputState.Buttons & ovrButton_Enter, inputState.IndexTrigger[0], inputState.IndexTrigger[1], inputState.HandTrigger[0], inputState.HandTrigger[1], inputState.Thumbstick[0].x, inputState.Thumbstick[0].y, inputState.Buttons & ovrButton_LThumb, inputState.Thumbstick[1].x, inputState.Thumbstick[1].y, inputState.Buttons & ovrButton_RThumb);
+		sprintf_s(send_buffer, sizeof(send_buffer), STATUS_FORMAT, \
+			roll, pitch, yaw, -pose.z, -pose.x, pose.y,
+			-handPoses[0].z, -handPoses[0].x, handPoses[0].y, handroll[0], handpitch[0], handyaw[0],\
+			-handPoses[1].z, -handPoses[1].x, handPoses[1].y, handroll[1], handpitch[1], handyaw[1], \
+			inputState.Buttons & ovrButton_A, inputState.Buttons & ovrButton_B, inputState.Buttons & ovrButton_X, inputState.Buttons & ovrButton_Y, inputState.Buttons & ovrButton_Enter,\
+			inputState.IndexTrigger[0], inputState.IndexTrigger[1], inputState.HandTrigger[0], inputState.HandTrigger[1], \
+			inputState.Thumbstick[0].x, inputState.Thumbstick[0].y, inputState.Buttons & ovrButton_LThumb, inputState.Thumbstick[1].x, inputState.Thumbstick[1].y, inputState.Buttons & ovrButton_RThumb);
 
 		//fprintf(stderr, "%s\n", send_buffer); // uncomment for debugging
 
@@ -132,23 +135,23 @@ void PositionBroadcaster::initialize(int argc, char **argv, ovrSession *sess) {
 	if (argc == 1) {
 		std::cout << "Running program without position broadcasting.\n";
 		num_locations = 0;
-	}
-	else if (argv[1][0] < 58 && argv[1][0] > 47) { // is a number
+	} else if (argv[1][0] < 58 && argv[1][0] > 47) { // is a number
 		sscanf_s(argv[1], "%d", &num_locations);
+
 		if (num_locations > MAX_LOCATIONS) {
 			std::cerr << "Too many locations asked for.\n%s", "wrong usage\n";
 			exit(EXIT_FAILURE);
-		}
-		else if (num_locations > (argc - 2) / 2) {
+		} else if (num_locations > (argc - 2) / 2) {
 			std::cerr << "Not enough locations provided.\n%s", "wrong usage\n";
 			exit(EXIT_FAILURE);
 		}
+
 		for (int i = 0; i < num_locations; i++) {
 			sscanf_s(argv[i * 2 + 2], "%d.%d.%d.%d", &locations[i].a1, &locations[i].a2, &locations[i].a3, &locations[i].a4);
 			sscanf_s(argv[i * 2 + 3], "%hu", &locations[i].port);
 		}
-	}
-	else {
+
+	} else {
 		num_locations = argc - 1;
 		if (argc > MAX_LOCATIONS + 1) {
 			std::cerr << "Too many locations provided. Maximum is " << MAX_LOCATIONS << ".\n";
